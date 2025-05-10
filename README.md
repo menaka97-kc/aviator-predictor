@@ -1,1 +1,1 @@
-# aviator_predictor .py
+# aviator_predictor
