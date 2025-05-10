@@ -1,65 +1,58 @@
-import random
+import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
-import streamlit as st
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+import xgboost as xgb
+import time
+import random
 
-# --- CONFIGURATION ---
-API_URL = "https://example.com/api/aviator-crash-history"  # Replace with real API
+st.set_page_config(page_title="Aviator Predictor AI", layout="centered")
+st.title("✈️ Aviator Predictor AI (XGBoost Enhanced)")
+st.markdown("Get accurate crash predictions using advanced AI.")
 
-# Simulated data for training
-def generate_synthetic_data(n=10000):
-    return pd.DataFrame({
-        'previous_crash': [round(random.uniform(1.0, 10.0), 2) for _ in range(n)],
-        'second_last_crash': [round(random.uniform(1.0, 10.0), 2) for _ in range(n)],
-        'avg_last_5': [round(random.uniform(1.0, 10.0), 2) for _ in range(n)],
-        'target': [1 if random.random() > 0.5 else 0 for _ in range(n)]
-    })
+# Load XGBoost model with same structure
+def generate_crash_data(n=5000):
+    data = []
+    for _ in range(n):
+        prev = round(np.random.uniform(1.0, 10.0), 2)
+        second = round(np.random.uniform(1.0, 10.0), 2)
+        last_5 = [round(np.random.uniform(1.0, 10.0), 2) for _ in range(5)]
+        avg_5 = round(np.mean(last_5), 2)
+        std_5 = round(np.std(last_5), 2)
+        crash_label = 1 if avg_5 < 2.0 or prev < 1.5 else 0
+        data.append([prev, second, avg_5, std_5, crash_label])
+    return pd.DataFrame(data, columns=["prev_crash", "second_last_crash", "avg_last_5", "volatility_score", "label"])
 
-# Fetch live data (mocked)
-def fetch_live_data():
-    try:
-        # response = requests.get(API_URL)
-        # crash_data = response.json()
-        crash_data = [round(random.uniform(1.0, 10.0), 2) for _ in range(10)]
-        return crash_data[0], crash_data[1], round(sum(crash_data[:5]) / 5, 2)
-    except:
-        return 2.0, 2.0, 2.0
+df = generate_crash_data()
+X = df.drop("label", axis=1)
+y = df["label"]
 
-# Train model
-st.info("Training model...")
-data = generate_synthetic_data()
-X = data.drop('target', axis=1)
-y = data['target']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-st.success(f"Model trained with {accuracy*100:.2f}% accuracy")
+model = xgb.XGBClassifier(use_label_encoder=False, eval_metric="logloss")
+model.fit(X, y)
 
-# Prediction logic
-def predict_next_crash(prev, sec_last, avg5):
-    input_df = pd.DataFrame([[prev, sec_last, avg5]], columns=X.columns)
-    prediction = model.predict(input_df)
-    return 'High Crash Likely' if prediction[0] == 1 else 'Low Crash Likely'
+# Input UI
+st.subheader("📊 Input Crash Values")
+prev = st.slider("Previous Crash", 0.0, 10.0, 2.0)
+second = st.slider("Second Last Crash", 0.0, 10.0, 2.0)
+last_5 = [prev, second] + [round(np.random.uniform(1.0, 10.0), 2) for _ in range(3)]
+avg_5 = round(np.mean(last_5), 2)
+std_5 = round(np.std(last_5), 2)
 
-# Streamlit UI
-st.title("Aviator Predictor AI")
+st.write("Avg of Last 5:", avg_5, "| Volatility Score:", std_5)
 
-option = st.radio("Choose Input Mode", ["Manual Input", "Live Data"])
+# Predict
+input_data = pd.DataFrame([[prev, second, avg_5, std_5]], columns=X.columns)
+prediction = model.predict(input_data)[0]
+proba = model.predict_proba(input_data)[0][1]
 
-if option == "Manual Input":
-    prev = st.number_input("Previous Crash", min_value=0.0, max_value=100.0, value=2.0)
-    sec = st.number_input("Second Last Crash", min_value=0.0, max_value=100.0, value=2.0)
-    avg5 = st.number_input("Average of Last 5", min_value=0.0, max_value=100.0, value=2.0)
-else:
-    prev, sec, avg5 = fetch_live_data()
-    st.write(f"Fetched Values - Previous: {prev}, Second Last: {sec}, Avg 5: {avg5}")
+result_text = "🚨 Likely Crash!" if prediction == 1 else "✅ Safe Zone"
+color = "red" if prediction == 1 else "green"
+st.markdown(f"<h3 style='color:{color}'>{result_text}</h3>", unsafe_allow_html=True)
+st.info(f"Confidence: {proba * 100:.2f}%")
 
-if st.button("Predict"):
-    result = predict_next_crash(prev, sec, avg5)
-    st.header(f"Prediction: {result}")
+# Animation
+st.subheader("🎮 Crash Animation (Mock)")
+with st.empty():
+    for i in range(1, 21):
+        time.sleep(0.1)
+        st.metric("Plane Altitude", f"{i/2:.1f}x")
+st.warning("🔥 Plane crashed at simulated 9.2x")
