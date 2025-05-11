@@ -1,4 +1,9 @@
 streamlit
 pandas
 numpy
-xgboost
+scikit-learn
+matplotlib
+streamlit-authenticator
+selenium
+requests
+webdriver-manager
